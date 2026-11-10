@@ -1,3 +1,4 @@
+const API_BASE = "/api/now-playing";
 const IMAGE_BASE = "https://image.tmdb.org/t/p/";
 
 const movieGrid = document.querySelector("#movie-grid");
@@ -102,13 +103,19 @@ async function fetchNowPlaying() {
   statusMessage.textContent = "영화 정보를 불러오고 있어요...";
 
   try {
-    const response = await fetch("/api/now-playing");
-    if (!response.ok) {
-      throw new Error(`영화 목록 요청 실패 (${response.status})`);
-    }
+    const pages = await Promise.all(
+      [1, 2, 3].map(async (page) => {
+        const response = await fetch(`${API_BASE}?page=${page}`);
 
-    const data = await response.json();
-    movies = Array.isArray(data.results) ? data.results : [];
+        if (!response.ok) {
+          throw new Error(`영화 정보 요청 실패 (${response.status})`);
+        }
+
+        return response.json();
+      }),
+    );
+
+    movies = pages.flatMap((page) => page.results || []);
     movies = movies.filter((movie) => movie.poster_path);
     statusMessage.textContent = movies.length
       ? `대한민국 현재 상영작 ${movies.length}편`
@@ -119,7 +126,7 @@ async function fetchNowPlaying() {
     console.error("현재 상영작을 불러오지 못했습니다:", error);
     statusMessage.classList.add("error");
     statusMessage.textContent =
-      "영화 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
+      "영화 정보를 불러오지 못했습니다. Vercel 배포 설정과 네트워크 연결을 확인한 뒤 새로고침해 주세요.";
     movieGrid.replaceChildren();
     heroTitle.textContent = "영화 정보를 불러오지 못했어요";
     heroOverview.textContent = "잠시 후 다시 시도해 주세요.";

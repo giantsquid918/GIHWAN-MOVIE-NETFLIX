@@ -1,44 +1,42 @@
-const TMDB_API_BASE = "https://api.themoviedb.org/3";
-
 module.exports = async function handler(request, response) {
   if (request.method !== "GET") {
     response.setHeader("Allow", "GET");
     return response.status(405).json({ error: "Method not allowed" });
   }
 
-  const apiKey = process.env.TMDB_API_KEY;
-  if (!apiKey) {
-    console.error("TMDB_API_KEY is not configured.");
-    return response.status(500).json({ error: "Movie service is not configured." });
+  const page = Number(new URL(request.url, "http://localhost").searchParams.get("page") || "1");
+  if (!Number.isInteger(page) || page < 1 || page > 3) {
+    return response.status(400).json({ error: "Invalid page" });
   }
 
+  const apiKey = process.env.TMDB_API_KEY;
+  if (!apiKey) {
+    console.error("TMDB_API_KEY environment variable is not configured.");
+    return response.status(500).json({ error: "Movie service is not configured" });
+  }
+
+  const params = new URLSearchParams({
+    api_key: apiKey,
+    language: "ko-KR",
+    region: "KR",
+    page: String(page),
+  });
+
   try {
-    const pages = await Promise.all(
-      [1, 2, 3].map(async (page) => {
-        const params = new URLSearchParams({
-          api_key: apiKey,
-          language: "ko-KR",
-          region: "KR",
-          page: String(page),
-        });
-        const result = await fetch(
-          `${TMDB_API_BASE}/movie/now_playing?${params.toString()}`,
-        );
-
-        if (!result.ok) {
-          throw new Error(`TMDB request failed (${result.status}).`);
-        }
-
-        return result.json();
-      }),
+    const tmdbResponse = await fetch(
+      `https://api.themoviedb.org/3/movie/now_playing?${params}`,
     );
 
-    response.setHeader("Cache-Control", "s-maxage=1800, stale-while-revalidate=3600");
-    return response.status(200).json({
-      results: pages.flatMap((page) => page.results || []),
-    });
+    if (!tmdbResponse.ok) {
+      console.error(`TMDB request failed with status ${tmdbResponse.status}.`);
+      return response.status(502).json({ error: "Movie service request failed" });
+    }
+
+    const data = await tmdbResponse.json();
+    response.setHeader("Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
+    return response.status(200).json(data);
   } catch (error) {
-    console.error("Failed to fetch now-playing movies from TMDB:", error);
-    return response.status(502).json({ error: "Unable to fetch movies." });
+    console.error("TMDB request could not be completed:", error);
+    return response.status(502).json({ error: "Movie service is unavailable" });
   }
 };
