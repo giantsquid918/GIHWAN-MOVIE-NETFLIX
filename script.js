@@ -1,5 +1,3 @@
-const API_KEY = window.TMDB_API_KEY;
-const API_BASE = "https://api.themoviedb.org/3";
 const IMAGE_BASE = "https://image.tmdb.org/t/p/";
 
 const movieGrid = document.querySelector("#movie-grid");
@@ -104,29 +102,13 @@ async function fetchNowPlaying() {
   statusMessage.textContent = "영화 정보를 불러오고 있어요...";
 
   try {
-    if (!API_KEY || API_KEY === "YOUR_TMDB_API_KEY") {
-      throw new Error("TMDB API 키를 config.js에 설정해야 합니다.");
+    const response = await fetch("/api/now-playing");
+    if (!response.ok) {
+      throw new Error(`영화 목록 요청 실패 (${response.status})`);
     }
 
-    const pages = await Promise.all(
-      [1, 2, 3].map(async (page) => {
-        const params = new URLSearchParams({
-          api_key: API_KEY,
-          language: "ko-KR",
-          region: "KR",
-          page: String(page),
-        });
-        const response = await fetch(`${API_BASE}/movie/now_playing?${params}`);
-
-        if (!response.ok) {
-          throw new Error(`TMDB 요청 실패 (${response.status})`);
-        }
-
-        return response.json();
-      }),
-    );
-
-    movies = pages.flatMap((page) => page.results || []);
+    const data = await response.json();
+    movies = Array.isArray(data.results) ? data.results : [];
     movies = movies.filter((movie) => movie.poster_path);
     statusMessage.textContent = movies.length
       ? `대한민국 현재 상영작 ${movies.length}편`
@@ -136,9 +118,8 @@ async function fetchNowPlaying() {
   } catch (error) {
     console.error("현재 상영작을 불러오지 못했습니다:", error);
     statusMessage.classList.add("error");
-    statusMessage.textContent = !API_KEY || API_KEY === "YOUR_TMDB_API_KEY"
-      ? "config.example.js를 config.js로 복사한 뒤 TMDB API 키를 설정해 주세요."
-      : "영화 정보를 불러오지 못했습니다. API 키와 네트워크 연결을 확인한 뒤 새로고침해 주세요.";
+    statusMessage.textContent =
+      "영화 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
     movieGrid.replaceChildren();
     heroTitle.textContent = "영화 정보를 불러오지 못했어요";
     heroOverview.textContent = "잠시 후 다시 시도해 주세요.";
